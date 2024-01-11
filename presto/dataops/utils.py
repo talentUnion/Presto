@@ -45,15 +45,20 @@ def construct_single_presto_input(
     dynamic_world is a 1d input of shape (num_timesteps,) representing the dynamic world classes
         of each timestep for that pixel
     """
-    num_timesteps_list = [x.shape[0] for x in [s1, s2, era5, srtm] if x is not None]
+    num_timesteps_list = [
+        x.shape[1] for x in [s1, s2, era5, srtm] if x is not None
+    ]
+    b = s2.shape[0]
     if dynamic_world is not None:
         num_timesteps_list.append(len(dynamic_world))
 
     assert len(num_timesteps_list) > 0
-    assert all(num_timesteps_list[0] == timestep for timestep in num_timesteps_list)
+    assert all(num_timesteps_list[0] == timestep
+               for timestep in num_timesteps_list)
     num_timesteps = num_timesteps_list[0]
-    mask, x = torch.ones(num_timesteps, len(BANDS)), torch.zeros(num_timesteps, len(BANDS))
 
+    mask, x = torch.ones(b, num_timesteps, len(BANDS)).to(s2), torch.zeros(
+        b, num_timesteps, len(BANDS)).to(s2)
     for band_group in [
         (s1, s1_bands, S1_BANDS),
         (s2, s2_bands, S2_BANDS),
@@ -68,26 +73,33 @@ def construct_single_presto_input(
 
         kept_output_bands = [x for x in output_bands if x not in REMOVED_BANDS]
         # construct a mapping from the input bands to the expected bands
-        kept_input_band_idxs = [i for i, val in enumerate(input_bands) if val in kept_output_bands]
-        kept_input_band_names = [val for val in input_bands if val in kept_output_bands]
+        kept_input_band_idxs = [
+            i for i, val in enumerate(input_bands) if val in kept_output_bands
+        ]
+        kept_input_band_names = [
+            val for val in input_bands if val in kept_output_bands
+        ]
 
-        input_to_output_mapping = [BANDS.index(val) for val in kept_input_band_names]
+        input_to_output_mapping = [
+            BANDS.index(val) for val in kept_input_band_names
+        ]
 
-        x[:, input_to_output_mapping] = data[:, kept_input_band_idxs]
-        mask[:, input_to_output_mapping] = 0
+        x[..., input_to_output_mapping] = data[..., kept_input_band_idxs]
+        mask[..., input_to_output_mapping] = 0
 
     if dynamic_world is None:
-        dynamic_world = torch.ones(num_timesteps) * (DynamicWorld2020_2021.class_amount)
+        dynamic_world = torch.ones(num_timesteps) * (
+            DynamicWorld2020_2021.class_amount)
 
     keep_indices = [idx for idx, val in enumerate(BANDS) if val != "B9"]
-    mask = mask[:, keep_indices]
+    mask = mask[..., keep_indices]
 
     if normalize:
-        # normalize includes x = x[:, keep_indices]
+        # normalize includes x = x[..., keep_indices]
         x = S1_S2_ERA5_SRTM.normalize(x)
         if s2_bands is not None:
             if ("B8" in s2_bands) and ("B4" in s2_bands):
-                mask[:, NORMED_BANDS.index("NDVI")] = 0
+                mask[..., NORMED_BANDS.index("NDVI")] = 0
     else:
-        x = x[:, keep_indices]
+        x = x[..., keep_indices]
     return x, mask, dynamic_world

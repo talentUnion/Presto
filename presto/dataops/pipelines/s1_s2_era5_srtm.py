@@ -19,7 +19,6 @@ try:
     TORCH_INSTALLED = True
 except ImportError:
     TORCH_INSTALLED = False
-
 """
 For easier normalization of the band values (instead of needing to recompute
 the normalization dict with the addition of new data), we provide maximum
@@ -73,18 +72,17 @@ STATIC_BANDS_DIV = SRTM_DIV_VALUES
 REMOVED_BANDS = ["B1", "B10"]
 RAW_BANDS = DYNAMIC_BANDS + STATIC_BANDS
 
-BANDS = [x for x in DYNAMIC_BANDS if x not in REMOVED_BANDS] + STATIC_BANDS + ["NDVI"]
+BANDS = [x for x in DYNAMIC_BANDS if x not in REMOVED_BANDS
+         ] + STATIC_BANDS + ["NDVI"]
 # NDVI is between 0 and 1
-ADD_BY = (
-    [DYNAMIC_BANDS_SHIFT[i] for i, x in enumerate(DYNAMIC_BANDS) if x not in REMOVED_BANDS]
-    + STATIC_BANDS_SHIFT
-    + [0.0]
-)
-DIVIDE_BY = (
-    [DYNAMIC_BANDS_DIV[i] for i, x in enumerate(DYNAMIC_BANDS) if x not in REMOVED_BANDS]
-    + STATIC_BANDS_DIV
-    + [1.0]
-)
+ADD_BY = ([
+    DYNAMIC_BANDS_SHIFT[i]
+    for i, x in enumerate(DYNAMIC_BANDS) if x not in REMOVED_BANDS
+] + STATIC_BANDS_SHIFT + [0.0])
+DIVIDE_BY = ([
+    DYNAMIC_BANDS_DIV[i]
+    for i, x in enumerate(DYNAMIC_BANDS) if x not in REMOVED_BANDS
+] + STATIC_BANDS_DIV + [1.0])
 
 NUM_TIMESTEPS = 12
 NUM_ORG_BANDS = len(BANDS)
@@ -93,27 +91,26 @@ TIMESTEPS_IDX = list(range(NUM_TIMESTEPS))
 NORMED_BANDS = [x for x in BANDS if x != "B9"]
 NUM_BANDS = len(NORMED_BANDS)
 BANDS_IDX = list(range(NUM_BANDS))
-BANDS_GROUPS_IDX: OrderedDictType[str, List[int]] = OrderedDict(
-    {
-        "S1": [NORMED_BANDS.index(b) for b in S1_BANDS],
-        "S2_RGB": [NORMED_BANDS.index(b) for b in ["B2", "B3", "B4"]],
-        "S2_Red_Edge": [NORMED_BANDS.index(b) for b in ["B5", "B6", "B7"]],
-        "S2_NIR_10m": [NORMED_BANDS.index(b) for b in ["B8"]],
-        "S2_NIR_20m": [NORMED_BANDS.index(b) for b in ["B8A"]],
-        "S2_SWIR": [NORMED_BANDS.index(b) for b in ["B11", "B12"]],  # Include B10?
-        "ERA5": [NORMED_BANDS.index(b) for b in ERA5_BANDS],
-        "SRTM": [NORMED_BANDS.index(b) for b in SRTM_BANDS],
-        "NDVI": [NORMED_BANDS.index("NDVI")],
-    }
-)
+BANDS_GROUPS_IDX: OrderedDictType[str, List[int]] = OrderedDict({
+    "S1": [NORMED_BANDS.index(b) for b in S1_BANDS],
+    "S2_RGB": [NORMED_BANDS.index(b) for b in ["B2", "B3", "B4"]],
+    "S2_Red_Edge": [NORMED_BANDS.index(b) for b in ["B5", "B6", "B7"]],
+    "S2_NIR_10m": [NORMED_BANDS.index(b) for b in ["B8"]],
+    "S2_NIR_20m": [NORMED_BANDS.index(b) for b in ["B8A"]],
+    "S2_SWIR": [NORMED_BANDS.index(b) for b in ["B11", "B12"]],  # Include B10?
+    "ERA5": [NORMED_BANDS.index(b) for b in ERA5_BANDS],
+    "SRTM": [NORMED_BANDS.index(b) for b in SRTM_BANDS],
+    "NDVI": [NORMED_BANDS.index("NDVI")],
+})
 
 
 class S1_S2_ERA5_SRTM(EEPipeline):
     item_shape = (NUM_TIMESTEPS, NUM_BANDS)
 
     def convert_tif_to_np(
-        self, tif_path: Path, fillna: bool = True
-    ) -> Tuple[np.ndarray, np.ndarray]:
+            self,
+            tif_path: Path,
+            fillna: bool = True) -> Tuple[np.ndarray, np.ndarray]:
         print(f"Loading Earth Observation data tif: {tif_path}")
         tif = load_tif(tif_path, fillna=fillna)
         print(f"Processing tif: {tif_path}")
@@ -140,10 +137,12 @@ class S1_S2_ERA5_SRTM(EEPipeline):
             band_1_np = input_array[:, :, NORMED_BANDS.index(band_1)]
             band_2_np = input_array[:, :, NORMED_BANDS.index(band_2)]
         else:
-            raise ValueError(f"Expected num_dims to be 2 or 3 - got {num_dims}")
+            raise ValueError(
+                f"Expected num_dims to be 2 or 3 - got {num_dims}")
 
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="invalid value encountered in true_divide")
+            warnings.filterwarnings(
+                "ignore", message="invalid value encountered in true_divide")
             # suppress the following warning
             # RuntimeWarning: invalid value encountered in true_divide
             # for cases where near_infrared + red == 0
@@ -168,7 +167,8 @@ class S1_S2_ERA5_SRTM(EEPipeline):
         if isinstance(x, np.ndarray):
             x = ((x + ADD_BY) / DIVIDE_BY).astype(np.float32)
         else:
-            x = (x + torch.tensor(ADD_BY)) / torch.tensor(DIVIDE_BY)
+            x = (x +
+                 torch.tensor(ADD_BY).to(x)) / torch.tensor(DIVIDE_BY).to(x)
 
         if len(x.shape) == 2:
             x = x[:, keep_indices]
@@ -183,4 +183,5 @@ class S1_S2_ERA5_SRTM_2020_2021(S1_S2_ERA5_SRTM):
     item_shape = (NUM_TIMESTEPS, NUM_BANDS)
 
     def create_ee_image(self, ee_polygon) -> ee.Image:
-        return create_ee_image(ee_polygon, date(2020, 1, 1), date(2021, 12, 31))
+        return create_ee_image(ee_polygon, date(2020, 1, 1),
+                               date(2021, 12, 31))
