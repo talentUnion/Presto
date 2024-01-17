@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 
 import torch
@@ -13,6 +14,8 @@ from .pipelines.s1_s2_era5_srtm import (
     S2_BANDS,
     SRTM_BANDS,
 )
+
+my_logger = logging.getLogger(__name__)
 
 
 def construct_single_presto_input(
@@ -45,10 +48,15 @@ def construct_single_presto_input(
     dynamic_world is a 1d input of shape (num_timesteps,) representing the dynamic world classes
         of each timestep for that pixel
     """
-    num_timesteps_list = [
-        x.shape[1] for x in [s1, s2, era5, srtm] if x is not None
-    ]
-    b = s2.shape[0]
+    if len(s2.shape) == 2:
+        num_timesteps_list = [
+            x.shape[0] for x in [s1, s2, era5, srtm] if x is not None
+        ]
+    else:
+        num_timesteps_list = [
+            x.shape[1] for x in [s1, s2, era5, srtm] if x is not None
+        ]
+        b = s2.shape[0]
     if dynamic_world is not None:
         num_timesteps_list.append(len(dynamic_world))
 
@@ -56,9 +64,15 @@ def construct_single_presto_input(
     assert all(num_timesteps_list[0] == timestep
                for timestep in num_timesteps_list)
     num_timesteps = num_timesteps_list[0]
+    if len(s2.shape) == 2:
+        mask, x = torch.ones(num_timesteps,
+                             len(BANDS)), torch.zeros(num_timesteps,
+                                                      len(BANDS))
 
-    mask, x = torch.ones(b, num_timesteps, len(BANDS)).to(s2), torch.zeros(
-        b, num_timesteps, len(BANDS)).to(s2)
+    else:
+
+        mask, x = torch.ones(b, num_timesteps, len(BANDS)).to(s2), torch.zeros(
+            b, num_timesteps, len(BANDS)).to(s2)
     for band_group in [
         (s1, s1_bands, S1_BANDS),
         (s2, s2_bands, S2_BANDS),
@@ -70,7 +84,8 @@ def construct_single_presto_input(
             assert input_bands is not None
         else:
             continue
-
+        my_logger.debug(f"output_bands{output_bands}")
+        my_logger.debug(f'removed band {REMOVED_BANDS}')
         kept_output_bands = [x for x in output_bands if x not in REMOVED_BANDS]
         # construct a mapping from the input bands to the expected bands
         kept_input_band_idxs = [
@@ -79,7 +94,7 @@ def construct_single_presto_input(
         kept_input_band_names = [
             val for val in input_bands if val in kept_output_bands
         ]
-
+        my_logger.debug(kept_input_band_names)
         input_to_output_mapping = [
             BANDS.index(val) for val in kept_input_band_names
         ]
@@ -92,6 +107,7 @@ def construct_single_presto_input(
             DynamicWorld2020_2021.class_amount)
 
     keep_indices = [idx for idx, val in enumerate(BANDS) if val != "B9"]
+
     mask = mask[..., keep_indices]
 
     if normalize:
