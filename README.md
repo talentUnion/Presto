@@ -168,7 +168,9 @@ Out[6]:
 dtype: int64
 
 ```
+## GitHub Learning
 
+Exploring GitHub achievements and pull requests.
 ## Reference
 If you find this code useful, please cite the following paper:
 ```
